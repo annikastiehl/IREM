@@ -9,8 +9,8 @@ This repository contains preprocessing code and computational workflows for inve
   
 ## Requirements
 
-* numpy 
-* pandas
-* xarray
-* scipy
-* neo
+- numpy
+- pandas
+- xarray
+- scipy
+- neo
