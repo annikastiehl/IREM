@@ -6,3 +6,6 @@ neo
 netcdf4
 h5netcdf
 dyca
+matplotlib
+seaborn
+scikit-learn
