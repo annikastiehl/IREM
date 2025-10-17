@@ -201,20 +201,65 @@ for group_name, region_dict in mean_over_regions_grouped_arrays.items():
 
     # Run dyca
     time = np.linspace(0, 1, 256)
-    dyca_result = dyca.dyca(data.T, time_index = time)
+    dyca_result = dyca.dyca(data.T, time_index=time, m=2, n=3)
     dyca_results[group_name] = dyca_result
     print(f"dyca completed for group: {group_name}")
 
 # plot the dyca eigenvalues for each group
-# %matplotlib notebook
-
+rows = 2
+cols = 4
+fig, axes = plt.subplots(rows, cols, figsize=(5 * cols, 4 * rows))
+axes = np.array(axes).flatten()
+i = 0
 for group_name, dyca_result in dyca_results.items():
-    plt.figure()
-    plt.bar(range(len(dyca_result['generalized_eigenvalues'])),
-            dyca_result['generalized_eigenvalues'])
-    plt.title(f"DyCA Eigenvalues for {group_name}")
-    plt.xlabel("Component")
-    plt.ylabel("Eigenvalue")
-    plt.grid()
-    plt.show()
-    plt.savefig(f"figures/dyca_eigenvalues_{group_name}.png")
+    ax = axes[i]
+    ax.bar(range(len(dyca_result['generalized_eigenvalues'])),
+           dyca_result['generalized_eigenvalues'])
+    ax.set_title(f"{group_name}")
+    ax.set_xlabel("Component")
+    ax.set_ylabel("Eigenvalue")
+    ax.grid()
+    i += 1
+
+fig.suptitle("DyCA Generalized Eigenvalues for Each Group")
+plt.tight_layout()
+plt.savefig(f"figures/dyca_eigenvalues.png")
+
+# plot the singular values for each group
+fig, axes = plt.subplots(rows, cols, figsize=(5 * cols, 4 * rows))
+axes = np.array(axes).flatten()
+i = 0
+for group_name, dyca_result in dyca_results.items():
+    ax = axes[i]
+    ax.bar(range(len(dyca_result['singular_values'])),
+           dyca_result['singular_values'])
+    ax.set_title(f"{group_name}")
+    ax.set_xlabel("Component")
+    ax.set_ylabel("Singular Value")
+    ax.grid()
+    i += 1
+fig.suptitle("DyCA Singular Values for Each Group")
+plt.tight_layout()
+plt.savefig(f"figures/dyca_singular_values.png")
+
+# plot the dyca trajectories for each group
+fig = plt.figure(figsize=(5 * cols, 4 * rows))
+axes = []
+
+for i in range(rows * cols):
+    ax = fig.add_subplot(rows, cols, i + 1, projection='3d')
+    axes.append(ax)
+
+for i, (group_name, dyca_result) in enumerate(dyca_results.items()):
+    ax = axes[i]
+    traj = dyca_result['amplitudes']
+    ax.plot3D(traj[:, 0], traj[:, 1], traj[:, 2])
+    ax.set_title(f"{group_name}")
+    ax.set_xlabel("Component 1")
+    ax.set_ylabel("Component 2")
+    ax.set_zlabel("Component 3")
+    ax.grid()
+
+fig.suptitle("DyCA Trajectories for Each Group")
+plt.tight_layout()
+plt.savefig("figures/dyca_trajectories.png")
