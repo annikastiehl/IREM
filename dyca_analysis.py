@@ -192,8 +192,10 @@ for group_name, region_dict in mean_over_regions_grouped_arrays.items():
 
 ##### The Variable `mean_over_regions_grouped_arrays` contains now a grouped array, full rank #####
 
-# Run dyca on the first trial of each group
+# Run dyca on the averaged trial of each group
 dyca_results = {}
+m = 4 # number of linear equations
+n = 6 # number of components
 for group_name, region_dict in mean_over_regions_grouped_arrays.items():
     # shape (n_regions, n_timepoints)
     data = np.array(list(region_dict.values()))
@@ -201,10 +203,19 @@ for group_name, region_dict in mean_over_regions_grouped_arrays.items():
 
     # Run dyca
     time = np.linspace(0, 1, 256)
-    dyca_result = dyca.dyca(data.T, time_index=time, m=2, n=3)
+    dyca_result = dyca.dyca(data.T, time_index=time, m=m, n=n)
+    dyca_result['signal'] = data
     dyca_results[group_name] = dyca_result
     print(f"dyca completed for group: {group_name}")
 
+# Run signal reconstruction for each group
+for group_name, dyca_result in dyca_results.items():
+    reconstructed_signal = dyca.reconstruction(dyca_result['signal'], dyca_result['amplitudes'])
+    dyca_results[group_name]['reconstruction'] = reconstructed_signal['reconstruction']
+    print(f"Signal reconstruction completed for group: {group_name}")
+
+
+##### PLOTS #####
 # plot the dyca eigenvalues for each group
 rows = 2
 cols = 4
@@ -265,29 +276,6 @@ plt.tight_layout()
 plt.savefig("figures/dyca_trajectories.png")
 
 # plot of the time series of the ipnuts for each group (mean_over_regions_grouped_arrays)
-fig, axes = plt.subplots(rows, cols, figsize=(5 * cols, 4 * rows))
-axes = np.array(axes).flatten()
-i = 0
-for group_name, region_dict in mean_over_regions_grouped_arrays.items():
-    ax = axes[i]
-    data = np.array(list(region_dict.values()))
-    j = 0
-    for region_idx in range(data.shape[0]):
-        ax.plot(data[region_idx, :] + j,
-                label=f"Region {list(region_dict.keys())[region_idx]}")
-        j += 0.00001
-    ax.set_title(f"{group_name}")
-    ax.set_xlabel("Timepoints")
-    ax.set_ylabel("Mean Signal")
-    ax.grid()
-    if i == 7:
-        ax.legend(fontsize='x-small', ncol=2)
-    i += 1
-fig.suptitle("Mean Signals Over Regions for Each Group")
-plt.tight_layout()
-plt.savefig("figures/mean_signals_over_regions.png")
-
-
 regions = list(list(mean_over_regions_grouped_arrays.values())[0].keys())
 num_regions = len(regions)
 color_map = plt.get_cmap('tab20', num_regions)  # oder eine andere Palette
@@ -326,4 +314,36 @@ fig.legend(
 )
 fig.suptitle("Mean Signals Over Regions for Each Group")
 plt.tight_layout(rect=[0, 0.05, 1, 1])
-plt.savefig("figures/mean_signals_over_regions2.png", bbox_inches='tight')
+plt.savefig("figures/mean_signals_over_regions.png", bbox_inches='tight')
+
+# Plot the reconstructed signals vs original signals for each group
+fig, axes = plt.subplots(rows, cols, figsize=(5 * cols, 4 * rows))
+axes = np.array(axes).flatten()
+i = 0
+for group_name, dyca_result in dyca_results.items():
+    ax = axes[i]
+    original_signal = dyca_result['signal']
+    reconstructed_signal = dyca_result['reconstruction']
+    print(f"Original signal shape: {original_signal.shape} and Reconstructed signal shape: {reconstructed_signal.shape}")
+
+    for region_idx in range(original_signal.shape[0]):
+        ax.plot(
+            original_signal[region_idx, :] + region_idx * 0.00001,
+            color='blue',
+            alpha=0.3
+        )
+        ax.plot(
+            reconstructed_signal[region_idx, :] + region_idx * 0.00001,
+            color='red',
+            alpha=0.7
+        )
+
+    ax.set_title(f"{group_name}")
+    ax.set_xlabel("Timepoints")
+    ax.set_ylabel("Signal")
+    ax.grid()
+    i += 1
+
+fig.suptitle("Original vs Reconstructed Signals for Each Group")
+plt.tight_layout()
+plt.savefig("figures/original_vs_reconstructed_signals.png")
