@@ -16,7 +16,7 @@ print(f"Number of non-NaNs in the data array: {notnans}")
 # maybe i can reconstruct the number of datapoints
 total_points = nans + notnans
 total_points2 = test_array.size
-total_points3 = 256*93*2*2*2*36
+total_points3 = 256 * 93 * 2 * 2 * 2 * 36
 print(f"Total number of data points (nans):n): {total_points}")
 print(f"Total number of data points (size): {total_points2}")
 print(f"Total number of data points (manual calc): {total_points3}")
@@ -263,3 +263,67 @@ for i, (group_name, dyca_result) in enumerate(dyca_results.items()):
 fig.suptitle("DyCA Trajectories for Each Group")
 plt.tight_layout()
 plt.savefig("figures/dyca_trajectories.png")
+
+# plot of the time series of the ipnuts for each group (mean_over_regions_grouped_arrays)
+fig, axes = plt.subplots(rows, cols, figsize=(5 * cols, 4 * rows))
+axes = np.array(axes).flatten()
+i = 0
+for group_name, region_dict in mean_over_regions_grouped_arrays.items():
+    ax = axes[i]
+    data = np.array(list(region_dict.values()))
+    j = 0
+    for region_idx in range(data.shape[0]):
+        ax.plot(data[region_idx, :] + j,
+                label=f"Region {list(region_dict.keys())[region_idx]}")
+        j += 0.00001
+    ax.set_title(f"{group_name}")
+    ax.set_xlabel("Timepoints")
+    ax.set_ylabel("Mean Signal")
+    ax.grid()
+    if i == 7:
+        ax.legend(fontsize='x-small', ncol=2)
+    i += 1
+fig.suptitle("Mean Signals Over Regions for Each Group")
+plt.tight_layout()
+plt.savefig("figures/mean_signals_over_regions.png")
+
+
+regions = list(list(mean_over_regions_grouped_arrays.values())[0].keys())
+num_regions = len(regions)
+color_map = plt.get_cmap('tab20', num_regions)  # oder eine andere Palette
+
+fig, axes = plt.subplots(rows, cols, figsize=(5 * cols, 4 * rows))
+axes = np.array(axes).flatten()
+handles = []
+labels = []
+
+for i, (group_name, region_dict) in enumerate(mean_over_regions_grouped_arrays.items()):
+    ax = axes[i]
+    data = np.array(list(region_dict.values()))
+
+    for region_idx, region in enumerate(regions):
+        h, = ax.plot(
+            data[region_idx, :] + region_idx * 0.00001,
+            color=color_map(region_idx),
+            label=f"Region {region}"
+        )
+        # Nur einmal die Handles/Labels speichern (z.B. im ersten Subplot)
+        if i == 0:
+            handles.append(h)
+            labels.append(f"Region {region}")
+    ax.set_title(f"{group_name}")
+    ax.set_xlabel("Timepoints")
+    ax.set_ylabel("Mean Signal")
+    ax.grid()
+
+# Legende unter das gesamte Grid
+fig.legend(
+    handles, labels,
+    loc='lower center',
+    bbox_to_anchor=(0.5, -0.05),
+    ncol=num_regions,
+    fontsize='small'
+)
+fig.suptitle("Mean Signals Over Regions for Each Group")
+plt.tight_layout(rect=[0, 0.05, 1, 1])
+plt.savefig("figures/mean_signals_over_regions2.png", bbox_inches='tight')
