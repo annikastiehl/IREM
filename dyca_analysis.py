@@ -144,9 +144,11 @@ print(f"\nTotal number of groups created: {len(grouped_arrays)}")
 # calculate mean over the trials for each group
 mean_grouped_arrays_trails = {}
 for group_name, group_data in grouped_arrays.items():
-    mean_data = group_data.mean(dim='trial')
-    mean_grouped_arrays_trails[group_name] = mean_data
-    print(f"Calculated mean for group: {group_name}, shape: {mean_data.shape}")
+    # mean_data = group_data.mean(dim='trial')
+    # mean_grouped_arrays_trails[group_name] = mean_data
+    # print(f"Calculated mean for group: {group_name}, shape: {mean_data.shape}")
+
+    mean_grouped_arrays_trails[group_name] = group_data.stack(agg_trial=('trial', 'time'))
 
 
 # calculate rank for each mean group
@@ -194,15 +196,15 @@ for group_name, region_dict in mean_over_regions_grouped_arrays.items():
 
 # Run dyca on the averaged trial of each group
 dyca_results = {}
-m = 4 # number of linear equations
-n = 6 # number of components
+m = 2  # number of linear equations
+n = 3  # number of components
 for group_name, region_dict in mean_over_regions_grouped_arrays.items():
     # shape (n_regions, n_timepoints)
     data = np.array(list(region_dict.values()))
     print(f"Running dyca on group: {group_name}, data shape: {data.shape}")
 
     # Run dyca
-    time = np.linspace(0, 1, 256)
+    time = np.linspace(0, 1, data.shape[1])
     dyca_result = dyca.dyca(data.T, time_index=time, m=m, n=n)
     dyca_result['signal'] = data
     dyca_results[group_name] = dyca_result
@@ -216,6 +218,7 @@ for group_name, dyca_result in dyca_results.items():
 
 
 ##### PLOTS #####
+add_plot_string = "_trial_concat"
 # plot the dyca eigenvalues for each group
 rows = 2
 cols = 4
@@ -234,7 +237,7 @@ for group_name, dyca_result in dyca_results.items():
 
 fig.suptitle("DyCA Generalized Eigenvalues for Each Group")
 plt.tight_layout()
-plt.savefig(f"figures/dyca_eigenvalues.png")
+plt.savefig(f"figures/dyca_eigenvalues{add_plot_string}.png")
 
 # plot the singular values for each group
 fig, axes = plt.subplots(rows, cols, figsize=(5 * cols, 4 * rows))
@@ -251,7 +254,7 @@ for group_name, dyca_result in dyca_results.items():
     i += 1
 fig.suptitle("DyCA Singular Values for Each Group")
 plt.tight_layout()
-plt.savefig(f"figures/dyca_singular_values.png")
+plt.savefig(f"figures/dyca_singular_values{add_plot_string}.png")
 
 # plot the dyca trajectories for each group
 fig = plt.figure(figsize=(5 * cols, 4 * rows))
@@ -264,7 +267,8 @@ for i in range(rows * cols):
 for i, (group_name, dyca_result) in enumerate(dyca_results.items()):
     ax = axes[i]
     traj = dyca_result['amplitudes']
-    ax.plot3D(traj[:, 0], traj[:, 1], traj[:, 2])
+    print(traj.shape)
+    ax.plot3D(traj[0, :], traj[1, :], traj[2, :])
     ax.set_title(f"{group_name}")
     ax.set_xlabel("Component 1")
     ax.set_ylabel("Component 2")
@@ -273,9 +277,9 @@ for i, (group_name, dyca_result) in enumerate(dyca_results.items()):
 
 fig.suptitle("DyCA Trajectories for Each Group")
 plt.tight_layout()
-plt.savefig("figures/dyca_trajectories.png")
+plt.savefig(f"figures/dyca_trajectories{add_plot_string}.png")
 
-# plot of the time series of the ipnuts for each group (mean_over_regions_grouped_arrays)
+# plot of the time series of the inputs for each group (mean_over_regions_grouped_arrays)
 regions = list(list(mean_over_regions_grouped_arrays.values())[0].keys())
 num_regions = len(regions)
 color_map = plt.get_cmap('tab20', num_regions)  # oder eine andere Palette
@@ -288,10 +292,11 @@ labels = []
 for i, (group_name, region_dict) in enumerate(mean_over_regions_grouped_arrays.items()):
     ax = axes[i]
     data = np.array(list(region_dict.values()))
+    offset = max(data.flatten()) * 0.1
 
     for region_idx, region in enumerate(regions):
         h, = ax.plot(
-            data[region_idx, :] + region_idx * 0.00001,
+            data[region_idx, :] + region_idx * offset,
             color=color_map(region_idx),
             label=f"Region {region}"
         )
@@ -314,7 +319,7 @@ fig.legend(
 )
 fig.suptitle("Mean Signals Over Regions for Each Group")
 plt.tight_layout(rect=[0, 0.05, 1, 1])
-plt.savefig("figures/mean_signals_over_regions.png", bbox_inches='tight')
+plt.savefig(f"figures/mean_signals_over_regions{add_plot_string}.png", bbox_inches='tight')
 
 # Plot the reconstructed signals vs original signals for each group
 fig, axes = plt.subplots(rows, cols, figsize=(5 * cols, 4 * rows))
@@ -328,12 +333,12 @@ for group_name, dyca_result in dyca_results.items():
 
     for region_idx in range(original_signal.shape[0]):
         ax.plot(
-            original_signal[region_idx, :] + region_idx * 0.00001,
+            original_signal[region_idx, :] + region_idx * offset,
             color='blue',
-            alpha=0.3
+            alpha=0.8
         )
         ax.plot(
-            reconstructed_signal[region_idx, :] + region_idx * 0.00001,
+            reconstructed_signal[region_idx, :] + region_idx * offset,
             color='red',
             alpha=0.7
         )
@@ -345,5 +350,37 @@ for group_name, dyca_result in dyca_results.items():
     i += 1
 
 fig.suptitle("Original vs Reconstructed Signals for Each Group")
+fig.legend(
+    ['Original Signal (blue)', 'Reconstructed Signal (red)'],
+    loc='lower center'
+)
 plt.tight_layout()
-plt.savefig("figures/original_vs_reconstructed_signals.png")
+plt.savefig(f"figures/original_vs_reconstructed_signals{add_plot_string}.png")
+
+
+# Trajectory plot, where encod and maint are colored differently and plotted in one figure
+fig = plt.figure(figsize=(5 * cols, 4 * rows))
+axes = []
+
+for i in range(rows * cols // 2):
+    ax = fig.add_subplot(rows // 2, cols, i + 1, projection='3d')
+    axes.append(ax)
+
+for i, (group_name, dyca_result) in enumerate(dyca_results.items()):
+    if "event_encod" in group_name:
+        ax = axes[i // 2]
+        traj = dyca_result['amplitudes']
+        ax.plot3D(traj[0, :], traj[1, :], traj[2, :], color='blue', label='Encod')
+    elif "event_maint" in group_name:
+        ax = axes[i // 2]
+        traj = dyca_result['amplitudes']
+        ax.plot3D(traj[0, :], traj[1, :], traj[2, :], color='red', label='Maint', alpha=0.7)
+        ax.set_title(f"{group_name.replace('event_maint', '')}")
+        ax.set_xlabel("Component 1")
+        ax.set_ylabel("Component 2")
+        ax.set_zlabel("Component 3")
+        ax.grid()
+        ax.legend()
+fig.suptitle("DyCA Trajectories: Encod (blue) vs Maint (red)")
+plt.tight_layout()
+plt.savefig(f"figures/dyca_trajectories_encod_maint{add_plot_string}.png")
