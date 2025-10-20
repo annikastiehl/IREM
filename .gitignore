@@ -3,5 +3,6 @@ figs/
 __pycache__/
 *.nc
 *.npz
+*.npy
 *.code-workspace
 figures/
