@@ -23,7 +23,8 @@ task_files = glob.glob(os.path.join(data_dir, f"{selected_task}/**.npz"), recurs
 print(f"Found {len(task_files)} files for task {selected_task}")
 
 # Only read the first file for demonstration
-task_file = task_files[:1]
+task_file = task_files[1:2]
+print(f"Using file: {task_file[0]}")
 data = np.load(task_file[0], allow_pickle=True)
 print(data.files)
 print(data['data'].shape)
