@@ -61,6 +61,13 @@ def moving_window_dyca_analysis(raw_data, fs=64, window_sec=5, hop_sec=2, m=2, n
         try:
             # Apply DyCA to window
             dyca_res_win = dyca.dyca(win, m=m, n=n, time_index=tv_win)
+            dyca_res_win['signal'] = win
+            reconstruction_dict = dyca.reconstruction(win.T, dyca_res_win['amplitudes'])
+
+            # Append reconstructed signal to dyca_res_win for potential later use
+            dyca_res_win['reconstruction_signals'] = reconstruction_dict['reconstruction']
+            dyca_res_win['reconstruction_modes'] = reconstruction_dict['modes']
+            dyca_res_win['reconstruction_cost'] = reconstruction_dict['cost']
             
             # Extract eigenvalues
             gev = np.asarray(dyca_res_win.get('generalized_eigenvalues', []))
