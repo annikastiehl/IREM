@@ -32,7 +32,7 @@ print(data['data'].shape)
 raw_data = data['data']  # shape (n_samples, n_features)
 
 # removing the mean from the data
-raw_data = raw_data - np.mean(raw_data, axis=0)
+# raw_data = raw_data - np.mean(raw_data, axis=0)
 
 # rank of the data
 data_rank = np.linalg.matrix_rank(raw_data)
@@ -166,7 +166,7 @@ raw_data = data['data']  # shape (n_samples, n_features)
 
 # Parameters
 fs = 64                      # sampling rate (Hz) -- you already assumed this
-window_sec = 2               # window length in seconds
+window_sec = 5               # window length in seconds
 hop_sec = 2                  # hop length in seconds (overlap = window - hop)
 window_len = int(window_sec * fs)   # e.g. 320
 hop = int(hop_sec * fs)             # e.g. 64
@@ -182,20 +182,21 @@ centers = start_idxs + window_len // 2
 time_centers = centers / fs   # in seconds
 
 # storage for top-3 eigenvalues per window
-topk = 5
+topk = 10
 eigs_top = np.full((n_windows, topk), np.nan)
+
+# build a short time vector for dyca call (relative time)
+tv_win = np.linspace(0, window_len / fs, window_len)
 
 print(f"Running DyCA on {n_windows} windows (window={window_len} samples, hop={hop} samples)")
 
 # iterate windows (use tqdm if available for progress)
 iterator = tqdm(enumerate(start_idxs), total=n_windows) if 'tqdm' in globals() else enumerate(start_idxs)
+
 for wi, s in iterator:
     win = raw_data[s : s + window_len, :]    # shape (window_len, n_features)
     # optional: remove mean per channel inside window to help stability
-    win = win - np.mean(win, axis=0)
-
-    # build a short time vector for dyca call (relative time)
-    tv_win = np.linspace(s / fs, (s + window_len - 1) / fs, window_len)
+    # win = win - np.mean(win, axis=0)
 
     try:
         # call dyca for the window
@@ -246,8 +247,15 @@ plt.savefig(out_fn, dpi=300)
 plt.show()
 
 print(f"Saved top-3 eigenvalue plot to: {out_fn}")
-# ------------- end moving-window code -----------------
 
+# save the eigenvalues over time to a CSV file
+eigs_df = pd.DataFrame(eigs_top, columns=[f"Eig_{i+1}" for i in range(topk)])
+eigs_df['Time_s'] = t_plot
+csv_out_fn = f"results/cross_task/dyca_top{topk}_eigenvalues_over_time_{os.path.basename(task_file[0]).split('.npz')[0]}.csv"
+eigs_df.to_csv(csv_out_fn, index=False)
+print(f"Saved top-k eigenvalues over time to: {csv_out_fn}")
+
+# ------------- end moving-window code -----------------
 
 print(1)
 
