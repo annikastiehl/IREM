@@ -91,18 +91,21 @@ def moving_window_dyca_analysis(raw_data, fs=64, window_sec=5, hop_sec=2, m=2, n
         }
     }, dyca_res_win
 
-def process_all_mvis_files(data_dir, output_dir="results/automated_mvis", 
+def process_all_task_files(data_dir, selected_task="mvis", output_dir=None, 
                           window_sec=5, hop_sec=2, topk=10):
-    """Process all MVIS files across patients and bands"""
+    """Process all task files across patients and bands"""
     
-    # Find all MVIS files
-    mvis_pattern = os.path.join(data_dir, "MVIS", "**/*.npz")
-    task_files = glob.glob(mvis_pattern, recursive=True)
+    if output_dir is None:
+        output_dir = f"results/automated_eigenvalues_{selected_task.lower()}"
     
-    print(f"Found {len(task_files)} MVIS files")
+    # Find all task files
+    task_pattern = os.path.join(data_dir, selected_task.upper(), "**/*.npz")
+    task_files = glob.glob(task_pattern, recursive=True)
+    
+    print(f"Found {len(task_files)} {selected_task.upper()} files")
     
     if len(task_files) == 0:
-        print(f"No files found matching pattern: {mvis_pattern}")
+        print(f"No files found matching pattern: {task_pattern}")
         return None
     
     # Group files by patient and band
@@ -159,19 +162,19 @@ def process_all_mvis_files(data_dir, output_dir="results/automated_mvis",
     
     # Create xarray dataset
     if all_results:
-        dataset = create_xarray_dataset(all_results, patient_ids, bands, topk)
+        dataset = create_xarray_dataset(all_results, patient_ids, bands, topk, selected_task)
         
         # Save results
         os.makedirs(output_dir, exist_ok=True)
         
         # Save xarray dataset
-        dataset_path = os.path.join(output_dir, "mvis_dyca_results.nc")
+        dataset_path = os.path.join(output_dir, f"{selected_task.lower()}_dyca_results.nc")
         dataset.to_netcdf(dataset_path)
         print(f"\nSaved xarray dataset to: {dataset_path}")
         
         # Save summary CSV
         summary_df = create_summary_dataframe(all_results)
-        csv_path = os.path.join(output_dir, "mvis_dyca_summary.csv")
+        csv_path = os.path.join(output_dir, f"{selected_task.lower()}_dyca_summary.csv")
         summary_df.to_csv(csv_path, index=False)
         print(f"Saved summary CSV to: {csv_path}")
         
@@ -181,7 +184,7 @@ def process_all_mvis_files(data_dir, output_dir="results/automated_mvis",
         print("No results to save")
         return None, None
 
-def create_xarray_dataset(all_results, patient_ids, bands, topk):
+def create_xarray_dataset(all_results, patient_ids, bands, topk, selected_task):
     """Create xarray dataset from results"""
     
     # Find maximum time length across all results
@@ -214,7 +217,8 @@ def create_xarray_dataset(all_results, patient_ids, bands, topk):
     }, coords=coords)
     
     # Add attributes
-    dataset.attrs['description'] = 'DyCA analysis results for MVIS task'
+    dataset.attrs['description'] = f'DyCA analysis results for {selected_task.upper()} task'
+    dataset.attrs['task'] = selected_task.upper()
     dataset.attrs['window_sec'] = list(all_results.values())[0]['window_params']['window_sec']
     dataset.attrs['hop_sec'] = list(all_results.values())[0]['window_params']['hop_sec']
     dataset.attrs['topk_eigenvalues'] = topk
@@ -248,7 +252,7 @@ def create_summary_dataframe(all_results):
     
     return pd.DataFrame(summary_data)
 
-def plot_results_summary(dataset, output_dir):
+def plot_results_summary(dataset, output_dir, selected_task):
     """Generate summary plots from xarray dataset"""
     
     os.makedirs(os.path.join(output_dir, 'figures'), exist_ok=True)
@@ -263,7 +267,7 @@ def plot_results_summary(dataset, output_dir):
         mean_eigs = dataset['eigenvalues'].isel(band=b_idx, eigenvalue_rank=0).mean(dim='time_window')
         
         mean_eigs.plot(ax=ax, marker='o')
-        ax.set_title(f'Mean Top Eigenvalue - {band.upper()} Band')
+        ax.set_title(f'Mean Top Eigenvalue - {band.upper()} Band ({selected_task.upper()})')
         ax.set_ylabel('Mean Eigenvalue')
         ax.tick_params(axis='x', rotation=45)
 
@@ -273,15 +277,15 @@ def plot_results_summary(dataset, output_dir):
         ax.set_ylim(ymin, ymax)
     
     plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, 'figures', 'mean_eigenvalues_by_patient.png'), dpi=300, bbox_inches='tight')
+    plt.savefig(os.path.join(output_dir, 'figures', f'mean_eigenvalues_by_patient_{selected_task.lower()}.png'), dpi=300, bbox_inches='tight')
     plt.show()
-    
 
 
 if __name__ == "__main__":
     # Configuration
+    selected_task = "mveb"  # Adjustable task selection
     data_dir = "/media/annika/Daten/Promotion/18_Marseille/03_Data/7tasks_raw/"
-    output_dir = "results/automated_mvis"
+    output_dir = f"results/automated_eigenvalues_{selected_task.lower()}"
     
     # Parameters for moving window analysis
     window_sec = 30
@@ -291,19 +295,21 @@ if __name__ == "__main__":
     # Overwrite parameter for not calculating the same again
     overwrite = False
     
-    print("Starting automated MVIS DyCA analysis...")
+    print(f"Starting automated {selected_task.upper()} DyCA analysis (only saving eigenvalues)...")
     print(f"Data directory: {data_dir}")
     print(f"Output directory: {output_dir}")
     print(f"Window parameters: {window_sec}s window, {hop_sec}s hop, top-{topk} eigenvalues")
     
     # Run analysis
-    if not overwrite and Path(os.path.join(output_dir, "mvis_dyca_results.nc")).exists():
+    dataset_path = os.path.join(output_dir, f"{selected_task.lower()}_dyca_results.nc")
+    if not overwrite and Path(dataset_path).exists():
         print("Results already exist and overwrite is False. Loading existing dataset...")
-        dataset = xr.load_dataset(os.path.join(output_dir, "mvis_dyca_results.nc"))
+        dataset = xr.load_dataset(dataset_path)
         all_results = None
     else:
-        dataset, all_results = process_all_mvis_files(
+        dataset, all_results = process_all_task_files(
             data_dir=data_dir,
+            selected_task=selected_task,
             output_dir=output_dir,
             window_sec=window_sec,
             hop_sec=hop_sec,
@@ -316,7 +322,7 @@ if __name__ == "__main__":
         print(f"Bands: {list(dataset.coords['band'].values)}")
         
         # Generate summary plots
-        plot_results_summary(dataset, output_dir)
+        plot_results_summary(dataset, output_dir, selected_task)
         
         print(f"\nAnalysis complete! Results saved to: {output_dir}")
     else:
