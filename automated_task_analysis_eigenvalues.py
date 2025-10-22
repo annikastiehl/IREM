@@ -283,7 +283,7 @@ def plot_results_summary(dataset, output_dir, selected_task):
 
 if __name__ == "__main__":
     # Configuration
-    selected_task = "audi"  # Adjustable task selection
+    selected_task = "rest"  # Adjustable task selection
     data_dir = "/media/annika/Daten/Promotion/18_Marseille/03_Data/7tasks_raw/"
     output_dir = f"results/automated_eigenvalues_{selected_task.lower()}"
     

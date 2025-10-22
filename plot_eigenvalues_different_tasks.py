@@ -97,4 +97,4 @@ def plot_both_bands_comparison(tasks: List[str]=['mvis', 'mveb'], results_dir="r
 
 if __name__ == "__main__":    
     # Example: compare three tasks (change to desired task list)
-    plot_both_bands_comparison(tasks=['mvis', 'mveb', "audi"])
+    plot_both_bands_comparison(tasks=['mvis', 'mveb', "audi", "lec1", "rest"])
