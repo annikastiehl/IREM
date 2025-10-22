@@ -5,7 +5,6 @@ __pycache__/
 *.npz
 *.npy
 *.code-workspace
-figures/
+
 *.csv
 *.h5
-*.png
