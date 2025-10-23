@@ -24,7 +24,7 @@ def load_task_dataset(task_name, results_dir="results"):
         raise FileNotFoundError(f"Dataset not found: {dataset_path}")
 
 
-def plot_both_bands_comparison(tasks: List[str]=['mvis', 'mveb'], results_dir="results"):
+def plot_both_bands_comparison(tasks: List[str]=['mvis', 'mveb'], results_dir="results", eigenvalue_rank: int=1):
     """
     Plot comparison for both gamma and beta bands in subplots for multiple tasks.
     
@@ -55,17 +55,17 @@ def plot_both_bands_comparison(tasks: List[str]=['mvis', 'mveb'], results_dir="r
                 continue
             
             # Extract eigenvalues
-            task_first_eigs = {task: [] for task in tasks}
+            task_eigs = {task: [] for task in tasks}
             for patient in common_patients:
                 for task, ds in datasets.items():
                     try:
                         eig = ds['eigenvalues'].sel(
-                            patient=patient, band=band, eigenvalue_rank=1
+                            patient=patient, band=band, eigenvalue_rank=eigenvalue_rank
                         ).mean(dim='time_window', skipna=True).values
                     except Exception as e:
                         print(f"Warning: couldn't extract eigen for task={task}, patient={patient}: {e}")
                         eig = np.nan
-                    task_first_eigs[task].append(np.asarray(eig).item() if np.ndim(eig) == 0 else np.nan)
+                    task_eigs[task].append(np.asarray(eig).item() if np.ndim(eig) == 0 else np.nan)
             
             # Plot grouped bars on subplot
             x_pos = np.arange(len(common_patients))
@@ -75,10 +75,10 @@ def plot_both_bands_comparison(tasks: List[str]=['mvis', 'mveb'], results_dir="r
             offsets = (np.arange(n_tasks) - (n_tasks - 1) / 2) * width
             
             for i, task in enumerate(tasks):
-                ax.bar(x_pos + offsets[i], task_first_eigs[task], width, label=task.upper(), alpha=0.8)
+                ax.bar(x_pos + offsets[i], task_eigs[task], width, label=task.upper(), alpha=0.8)
             
             ax.set_xlabel('Patients')
-            ax.set_ylabel('First Eigenvalue (Mean)')
+            ax.set_ylabel(f'Eigenvalue {eigenvalue_rank} (Mean)')
             ax.set_title(f'{band.upper()} Band')
             ax.set_xticks(x_pos)
             ax.set_xticklabels(common_patients, rotation=45, ha='right')
@@ -89,12 +89,14 @@ def plot_both_bands_comparison(tasks: List[str]=['mvis', 'mveb'], results_dir="r
             print(f"Error plotting {band} band: {e}")
             continue
     
-    plt.suptitle(f'First Eigenvalue Comparison: {" vs ".join([t.upper() for t in tasks])}')
+    plt.suptitle(f'Eigenvalue {eigenvalue_rank} Comparison: {" vs ".join([t.upper() for t in tasks])}')
     plt.tight_layout()
     tasks_tag = "_".join([t.lower() for t in tasks])
-    plt.savefig(f'first_eigenvalue_comparison_{tasks_tag}_both_bands.png', dpi=300, bbox_inches='tight')
+    plt.savefig(f'eigenvalue_{eigenvalue_rank}_comparison_{tasks_tag}_both_bands.png', dpi=300, bbox_inches='tight')
     plt.show()
 
 if __name__ == "__main__":    
     # Example: compare three tasks (change to desired task list)
-    plot_both_bands_comparison(tasks=['mvis', 'mveb', "audi", "lec1", "rest"])
+    eigenvalue_ranks = [1,2,3,4,5,6,7,8,9,10]
+    for eigenvalue_rank in eigenvalue_ranks:
+        plot_both_bands_comparison(tasks=['mvis', 'mveb', "audi", "lec1", "rest"], eigenvalue_rank=eigenvalue_rank)
