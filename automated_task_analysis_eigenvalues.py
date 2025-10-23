@@ -260,16 +260,22 @@ def plot_results_summary(dataset, output_dir, selected_task):
     # Plot 1: Mean eigenvalues by patient and band
     fig, axes = plt.subplots(1, 2, figsize=(15, 6))
     
+    patient_labels = list(dataset.coords['patient'].values)
+    x = np.arange(len(patient_labels))
+    
     for b_idx, band in enumerate(dataset.coords['band'].values):
         ax = axes[b_idx]
         
-        # Get mean eigenvalues across time for each patient
-        mean_eigs = dataset['eigenvalues'].isel(band=b_idx, eigenvalue_rank=0).mean(dim='time_window')
+        # Plot first 3 eigenvalues (ranks 1..3) mean across time for each patient
+        for rank_idx in range(3):  # indices 0,1,2 -> eigenvalue ranks 1..3
+            mean_eigs = dataset['eigenvalues'].isel(band=b_idx, eigenvalue_rank=rank_idx).mean(dim='time_window')
+            ax.plot(x, mean_eigs.values, marker='o', label=f'EV{rank_idx+1}')
         
-        mean_eigs.plot(ax=ax, marker='o')
-        ax.set_title(f'Mean Top Eigenvalue - {band.upper()} Band ({selected_task.upper()})')
+        ax.set_title(f'Mean Top 3 Eigenvalues - {band.upper()} Band ({selected_task.upper()})')
         ax.set_ylabel('Mean Eigenvalue')
-        ax.tick_params(axis='x', rotation=45)
+        ax.set_xticks(x)
+        ax.set_xticklabels(patient_labels, rotation=45)
+        ax.legend()
 
     ymin = min(ax.get_ylim()[0] for ax in axes)
     ymax = max(ax.get_ylim()[1] for ax in axes)
@@ -283,7 +289,7 @@ def plot_results_summary(dataset, output_dir, selected_task):
 
 if __name__ == "__main__":
     # Configuration
-    selected_task = "rest"  # Adjustable task selection
+    selected_task = "mvis"  # Adjustable task selection
     data_dir = "/media/annika/Daten/Promotion/18_Marseille/03_Data/7tasks_raw/"
     output_dir = f"results/automated_eigenvalues_{selected_task.lower()}"
     
@@ -293,7 +299,7 @@ if __name__ == "__main__":
     topk = 10
 
     # Overwrite parameter for not calculating the same again
-    overwrite = False
+    overwrite = True
     
     print(f"Starting automated {selected_task.upper()} DyCA analysis (only saving eigenvalues)...")
     print(f"Data directory: {data_dir}")
