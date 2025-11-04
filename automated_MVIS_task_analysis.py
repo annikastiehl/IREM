@@ -205,7 +205,24 @@ def process_all_mvis_files_memory_efficient(data_dir, output_dir="results/automa
             raw_data = data['data']
             
             print(f"  Data shape: {raw_data.shape}")
-            
+
+            # Apply electrode selection if specified
+            if params_electrodes is not None:
+                cutting_half = params_electrodes['cutting_half_electrodes']
+                offset = params_electrodes['offset_electrodes']
+                random_elec = params_electrodes['random_electrodes']
+
+                n_electrodes = raw_data.shape[1]
+                if cutting_half:
+                    half = n_electrodes // 2
+                    if random_elec:
+                        selected_indices = np.random.choice(n_electrodes, half, replace=False)
+                        raw_data = raw_data[:, selected_indices]
+                    else:
+                        raw_data = raw_data[:, offset::2]
+
+                    print(f"  Selected {half} electrodes (cutting half), new shape: {raw_data.shape}")
+
             # Perform moving window analysis (memory efficient)
             results = moving_window_dyca_analysis_minimal(
                 raw_data, 
@@ -371,17 +388,27 @@ def create_summary_plots_from_hdf5(hdf5_file, metadata_df, output_dir):
 
 if __name__ == "__main__":
     # Configuration
-    data_dir = "/media/annika/Daten/Promotion/18_Marseille/03_Data/7tasks_raw/"
-    output_dir = "results/automated_mvis_memory_efficient"
-    
+    data_dir = "/home/astiehl/05_Code/Promotion/marseille/IREM/7tasks_raw"  # "/media/annika/Daten/Promotion/18_Marseille/03_Data/7tasks_raw/"
+    output_dir = "results/automated_mvis_2s_halfelectrodes"
+
     # Parameters for moving window analysis
-    window_sec = 30
-    hop_sec = 20
+    window_sec = 2
+    hop_sec = 1
     topk = 10
 
+    # Parameter for cutting the half of electrodes
+    cutting_half_electrodes = True
+    offset_electrodes = 0
+    random_electrodes = False
+    params_electrodes = {
+        'cutting_half_electrodes': cutting_half_electrodes,
+        'offset_electrodes': offset_electrodes,
+        'random_electrodes': random_electrodes
+    }
+
     # Overwrite parameter for not calculating the same again
-    overwrite = True
-    
+    overwrite = False
+
     print("Starting memory-efficient automated MVIS DyCA analysis...")
     print(f"Data directory: {data_dir}")
     print(f"Output directory: {output_dir}")
