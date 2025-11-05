@@ -8,3 +8,5 @@ __pycache__/
 
 *.csv
 *.h5
+
+results/automated_mvis_2s_halfelectrodes+1/figures_EigsOverOne/

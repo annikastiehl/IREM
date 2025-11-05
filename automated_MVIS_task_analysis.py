@@ -33,8 +33,8 @@ def extract_patient_and_band_info(filepath):
     return patient_id, band
 
 
-def moving_window_dyca_analysis_minimal(raw_data, fs=64, window_sec=5, hop_sec=2, m=2, n=3, topk=10):
-    """Memory-efficient moving window DyCA analysis - only stores essential results"""
+def moving_window_dyca_analysis_minimal(raw_data, fs=64, window_sec=5, hop_sec=2, m=2, n=3, topk=10, path_to_save=None):
+    """Moving window DyCA analysis - only stores essential results"""
 
     window_len = int(window_sec * fs)
     hop = int(hop_sec * fs)
@@ -80,6 +80,13 @@ def moving_window_dyca_analysis_minimal(raw_data, fs=64, window_sec=5, hop_sec=2
                 gev_sorted = np.sort(gev)[::-1]
                 take = min(topk, gev_sorted.size)
                 eigs_top[wi, :take] = gev_sorted[:take]
+            if np.any(gev > 1.0):
+                warnings.warn(f"    Window {wi}: Generalized eigenvalues > 1 detected.")
+                # TODO: Add here:
+                # plot the window data and the singular values of this window
+                plot_window_data(win, fs, wi, path_to_save)
+                svd_values = calc_svd(win)
+                plot_singular_values(svd_values, wi, path_to_save)
 
             # Extract and store singular values
             sv = np.asarray(dyca_res_win.get('singular_values', []))
@@ -102,9 +109,9 @@ def moving_window_dyca_analysis_minimal(raw_data, fs=64, window_sec=5, hop_sec=2
             # Store reconstruction cost only
             reconstruction_cost_all[wi] = reconstruction_dict.get('cost', np.nan)
 
-            # Force garbage collection every 10 windows
-            if wi % 10 == 0:
-                gc.collect()
+            # # Force garbage collection every 10 windows
+            # if wi % 10 == 0:
+            #     gc.collect()
 
         except Exception as e:
             if wi == 0:
@@ -126,6 +133,49 @@ def moving_window_dyca_analysis_minimal(raw_data, fs=64, window_sec=5, hop_sec=2
             'n': n
         }
     }
+
+
+def plot_window_data(window_data, fs, window_index, path_to_save):
+    """Plot the window data for debugging purposes"""
+    time_vector = np.arange(window_data.shape[0]) / fs
+
+    plt.figure(figsize=(10, 6))
+    offset = np.max(np.abs(window_data)) * 0.3
+    for ch in range(window_data.shape[1]):
+        plt.plot(time_vector, window_data[:, ch] + ch * offset)  # Offset for visibility
+    plt.title(f'Window {window_index} Data')
+    plt.xlabel('Time (s)')
+    plt.ylabel('Amplitude + Offset')
+    plt.legend(loc='upper right', fontsize='small')
+    plt.grid(alpha=0.3)
+
+    if path_to_save is not None:
+        os.makedirs(path_to_save, exist_ok=True)
+        plt.savefig(os.path.join(path_to_save, f'window_{window_index}_data.png'),
+                    dpi=300, bbox_inches='tight')
+    plt.close()
+
+
+def calc_svd(window_data):
+    """Calculate SVD of the window data"""
+    U, S, VT = np.linalg.svd(window_data, full_matrices=False)
+    return S
+
+
+def plot_singular_values(singular_values, window_index, path_to_save):
+    """Plot singular values for debugging purposes"""
+    plt.figure(figsize=(8, 5))
+    plt.bar(range(len(singular_values)), singular_values)
+    plt.title(f'Window {window_index} Singular Values')
+    plt.xlabel('Component Index')
+    plt.ylabel('Singular Value')
+    plt.grid(alpha=0.3)
+
+    if path_to_save is not None:
+        os.makedirs(path_to_save, exist_ok=True)
+        plt.savefig(os.path.join(path_to_save, f'window_{window_index}_singular_values.png'),
+                    dpi=300, bbox_inches='tight')
+    plt.close()
 
 
 def save_patient_results_hdf5(results, patient_id, band, output_file):
@@ -155,7 +205,7 @@ def save_patient_results_hdf5(results, patient_id, band, output_file):
 
 
 def process_all_mvis_files_memory_efficient(data_dir, output_dir="results/automated_mvis",
-                                            window_sec=5, hop_sec=2, topk=10, params_electrodes=None):
+                                            window_sec=5, hop_sec=2, topk=10, params_electrodes=None, plot_eigenvalues=False):
     """Memory-efficient processing of all MVIS files"""
 
     # Find all MVIS files
@@ -227,12 +277,16 @@ def process_all_mvis_files_memory_efficient(data_dir, output_dir="results/automa
 
                     print(f"  Selected {half} electrodes (cutting half), new shape: {raw_data.shape}")
 
+            # Apply "Remove Mean" from each channel
+            raw_data = raw_data - np.mean(raw_data, axis=0, keepdims=True)
+
             # Perform moving window analysis (memory efficient)
             results = moving_window_dyca_analysis_minimal(
                 raw_data,
                 window_sec=window_sec,
                 hop_sec=hop_sec,
-                topk=topk
+                topk=topk,
+                path_to_save=os.path.join(output_dir, f"figures_EigsOverOne/patient_{patient_id}_{band}")
             )
 
             if results is not None:
@@ -248,6 +302,10 @@ def process_all_mvis_files_memory_efficient(data_dir, output_dir="results/automa
                     'mean_top_eigenvalue': np.nanmean(results['eigenvalues'][:, 0]),
                     'data_shape': raw_data.shape
                 })
+
+                # Plot the eigenvalues over time for this patient-band
+                if plot_eigenvalues:
+                    plot_single_patient_eigenvalues({(patient_id, band): results}, patient_id, band, output_dir, eigenvalues_to_plot=20)
 
                 successful_patients += 1
                 print(f"  ✓ Saved results for {patient_id}-{band}")
@@ -354,7 +412,7 @@ def create_summary_plots_from_hdf5(hdf5_file, metadata_df, output_dir):
     plt.show()
 
     # Plot 2: Time courses for first few patients
-    n_patients_plot = min(3, len(patients))
+    n_patients_plot = min(5, len(patients))
     fig, axes = plt.subplots(len(bands), n_patients_plot, figsize=(5 * n_patients_plot, 4 * len(bands)))
     if len(bands) == 1:
         axes = axes.reshape(1, -1)
@@ -375,7 +433,7 @@ def create_summary_plots_from_hdf5(hdf5_file, metadata_df, output_dir):
                 time_centers = results['time_centers']
 
                 # Plot top 3 eigenvalues
-                for comp in range(min(3, eigenvals.shape[1])):
+                for comp in range(min(5, eigenvals.shape[1])):
                     valid_mask = ~np.isnan(eigenvals[:, comp])
                     if valid_mask.sum() > 0:
                         ax.plot(time_centers[valid_mask], eigenvals[valid_mask, comp],
@@ -384,6 +442,7 @@ def create_summary_plots_from_hdf5(hdf5_file, metadata_df, output_dir):
                 ax.set_title(f'{patient} - {band.upper()}')
                 ax.set_xlabel('Time (s)')
                 ax.set_ylabel('Eigenvalue')
+                ax.set_ylim(bottom=0.99, top=1.01)
                 ax.legend()
                 ax.grid(alpha=0.3)
 
@@ -393,19 +452,70 @@ def create_summary_plots_from_hdf5(hdf5_file, metadata_df, output_dir):
     plt.show()
 
 
+def plot_eigenvalues_over_time(hdf5_file, metadata_df, output_dir):
+    """Plot eigenvalues over time for a specific patient and band"""
+
+    results = load_results_from_hdf5(hdf5_file)
+
+    # Get unique patients and bands
+    patients = sorted(metadata_df['patient_id'].unique())
+    bands = sorted(metadata_df['band'].unique())
+
+    for patient in patients:
+        for band in bands:
+            plot_single_patient_eigenvalues(results, patient, band, output_dir)
+
+    return 0
+
+
+def plot_single_patient_eigenvalues(results, patient_id, band, output_dir, eigenvalues_to_plot=5):
+    """Plot eigenvalues over time for a specific patient and band"""
+
+    key = (patient_id, band)
+    if key not in results:
+        print(f"No results found for {patient_id} - {band}")
+        return
+
+    patient_results = results[key]
+    eigenvals = patient_results['eigenvalues']
+    time_centers = patient_results['time_centers']
+
+    plt.figure(figsize=(10, 6))
+
+    # Plot top 5 eigenvalues
+    for comp in range(min(eigenvalues_to_plot, eigenvals.shape[1])):
+        valid_mask = ~np.isnan(eigenvals[:, comp])
+        if valid_mask.sum() > 0:
+            plt.plot(time_centers[valid_mask], eigenvals[valid_mask, comp],
+                     label=f'Eig {comp + 1}', marker='o', markersize=2)
+
+    plt.title(f'Eigenvalues Over Time - {patient_id} - {band.upper()}')
+    plt.xlabel('Time (s)')
+    plt.ylabel('Eigenvalue')
+    # plt.ylim(bottom=0.90, top=1.01)
+    plt.legend()
+    plt.grid(alpha=0.3)
+
+    figures_dir = os.path.join(output_dir, 'figures')
+    os.makedirs(figures_dir, exist_ok=True)
+    plt.savefig(os.path.join(figures_dir, f'eigenvalues_{patient_id}_{band}.png'),
+                dpi=300, bbox_inches='tight')
+    plt.show()
+
+
 if __name__ == "__main__":
     # Configuration
     data_dir = "/home/astiehl/05_Code/Promotion/marseille/IREM/7tasks_raw"  # "/media/annika/Daten/Promotion/18_Marseille/03_Data/7tasks_raw/"
-    output_dir = "results/automated_mvis_2s_halfelectrodes"
+    output_dir = "results/automated_mvis_2s_halfelectrodes+1"
 
     # Parameters for moving window analysis
     window_sec = 2
     hop_sec = 1
-    topk = 10
+    topk = 20
 
     # Parameter for cutting the half of electrodes
     cutting_half_electrodes = True
-    offset_electrodes = 0
+    offset_electrodes = 1
     random_electrodes = False
     params_electrodes = {
         'cutting_half_electrodes': cutting_half_electrodes,
@@ -414,7 +524,7 @@ if __name__ == "__main__":
     }
 
     # Overwrite parameter for not calculating the same again
-    overwrite = False
+    overwrite = True
 
     print("Starting memory-efficient automated MVIS DyCA analysis...")
     print(f"Data directory: {data_dir}")
@@ -437,7 +547,8 @@ if __name__ == "__main__":
             window_sec=window_sec,
             hop_sec=hop_sec,
             topk=topk,
-            params_electrodes=params_electrodes
+            params_electrodes=params_electrodes,
+            plot_eigenvalues=True
         )
 
     if results_file is not None and metadata_df is not None:
@@ -447,6 +558,9 @@ if __name__ == "__main__":
 
         # Generate memory-efficient plots
         create_summary_plots_from_hdf5(results_file, metadata_df, output_dir)
+
+        # Generate individual eigenvalue plots
+        plot_eigenvalues_over_time(results_file, metadata_df, output_dir)
 
         print(f"\nAnalysis complete! Results saved to: {output_dir}")
         print(f"HDF5 file: {results_file}")
